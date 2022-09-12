@@ -26,13 +26,20 @@ export default class ScreepsStatsd {
   _shard;
   _graphite;
   _token;
-  _success;
-  constructor(host, email, password, shard, graphite) {
+  _memtype;
+  _segment;
+  _path;
+  _uri;
+  _client;
+  constructor(host, email, password, shard, graphite, memtype, segment, path) {
     this._host = host;
     this._email = email;
     this._password = password;
     this._shard = shard;
     this._graphite = graphite;
+    this._memtype = (memtype === 'memory' || memtype === 'memory-segment') ? memtype : 'memory';
+    this._segment = segment;
+    this._path = path || 'stats';
     this._client = new StatsD({host: this._graphite});
   }
   run( string ) {
@@ -46,7 +53,7 @@ export default class ScreepsStatsd {
   }
 
   async signin() {
-    if(this.token) {
+    if(this._token) {
       return;
     }
     console.log("New login request -", new Date());
@@ -68,7 +75,21 @@ export default class ScreepsStatsd {
     try {
       await this.signin();
 
-      const response = await fetch(this._host + `/api/user/memory?path=stats&shard=${this._shard}`, {
+      if (!this._uri) {
+        uri = '/api/user/' + this._memtype + '?';
+        if (this._memtype === 'memory-segment') {
+          uri += `segment=${this._segment}`;
+        }
+        else {
+          uri += `path=${this._path}`;
+        }
+        if (this._shard) {
+          uri += `&shard=${this._shard}`;
+        }
+        this._uri = uri;
+      }
+      console.log(this._host + this._uri);
+      const response = await fetch(this._host + this._uri, {
         method: 'GET',
         headers: {
           "X-Token": this._token,
@@ -80,8 +101,19 @@ export default class ScreepsStatsd {
       
       this._token = response.headers['x-token'];
       if (!data?.data || data.error) throw new Error(data?.error ?? 'No data');
-      const unzippedData = JSON.parse(zlib.gunzipSync(Buffer.from(data.data.split('gz:')[1], 'base64')).toString())
-      this.report(unzippedData);
+      stringData;
+      if (this._memtype === 'memory') {
+        //memory comes as gz
+        const gzipData = new Buffer.from(data.data.split('gz:')[1], 'base64');
+        stringData = zlib.gunzipSync(gzipData).toString();
+      }
+      else {
+        //segments come as plain text
+        stringData = data.data;
+      }
+      console.log(stringData);
+      const parsedData = JSON.parse(stringData);
+      this.report(parsedData);
     } catch (e) {
       console.error(e);
       this._token = undefined;
