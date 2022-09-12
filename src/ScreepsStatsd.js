@@ -76,7 +76,7 @@ export default class ScreepsStatsd {
       await this.signin();
 
       if (!this._uri) {
-        uri = '/api/user/' + this._memtype + '?';
+        let uri = '/api/user/' + this._memtype + '?';
         if (this._memtype === 'memory-segment') {
           uri += `segment=${this._segment}`;
         }
@@ -88,7 +88,7 @@ export default class ScreepsStatsd {
         }
         this._uri = uri;
       }
-      console.log(this._host + this._uri);
+      // console.log(this._host + this._uri);
       const response = await fetch(this._host + this._uri, {
         method: 'GET',
         headers: {
@@ -101,7 +101,7 @@ export default class ScreepsStatsd {
       
       this._token = response.headers['x-token'];
       if (!data?.data || data.error) throw new Error(data?.error ?? 'No data');
-      stringData;
+      let stringData;
       if (this._memtype === 'memory') {
         //memory comes as gz
         const gzipData = new Buffer.from(data.data.split('gz:')[1], 'base64');
@@ -111,7 +111,7 @@ export default class ScreepsStatsd {
         //segments come as plain text
         stringData = data.data;
       }
-      console.log(stringData);
+      // console.log(stringData);
       const parsedData = JSON.parse(stringData);
       this.report(parsedData);
     } catch (e) {
@@ -121,6 +121,9 @@ export default class ScreepsStatsd {
   }
 
   report(data, prefix="") {
+    if (!data) { 
+      return; 
+    }
     if (prefix === '') console.log("Pushing to gauges -", new Date())
     for (const [k,v] of Object.entries(data)) {
       if (typeof v === 'object') {
